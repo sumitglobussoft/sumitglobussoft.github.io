@@ -52,20 +52,19 @@
 
   <div class="bg">
     <h3>The problem behind the models</h3>
-    <p>These models train on real outcomes from a high-volume <b>job-application
-      pipeline</b> — thousands of submissions a month across many applicant-tracking
-      systems. At that scale, <em>applying</em> isn't the bottleneck; knowing which
-      applications are worth a human's follow-up time is. The models turn that
-      history into a <b>ranking signal</b> (who's likely to respond) and a
-      <b>capacity forecast</b> (how much is coming) — built on TensorFlow because one
-      framework, with production-grade in-graph preprocessing, covers every data
-      shape the problem throws at it.</p>
+    <p>These models train on real operational data from a live <b>inside-sales call
+      system</b> — hundreds of calls a day, of which only ~41% connect. At that
+      volume, <em>placing</em> calls isn't the bottleneck; knowing when and by whom
+      to dial is. The models turn that history into a <b>ranking signal</b> (which
+      calls will connect) and a <b>capacity forecast</b> (how much volume is coming)
+      — built on TensorFlow because one framework, with production-grade in-graph
+      preprocessing, covers every data shape the problem throws at it.</p>
   </div>
 
   <a class="card" href="explainer.html">
     <span class="k">Spec sheet · concepts, no code</span>
     <h2>How the ML Actually Works</h2>
-    <p>A ground-up teardown of three TensorFlow models — the business problem, the
+    <p>A ground-up teardown of two TensorFlow models — the business problem, the
       paradigm flip, the training loop, and the honesty discipline (leakage,
       overfitting, imbalance) — every piece framed as the engineering it really is.</p>
     <span class="go">Read the explainer →</span>

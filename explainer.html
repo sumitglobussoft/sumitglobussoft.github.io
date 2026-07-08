@@ -171,14 +171,14 @@
     <span><b>SUBJECT</b> tensorflow poc suite</span>
   </div>
   <h1>How the ML Actually Works</h1>
-  <p class="lede">A ground-up teardown of the three TensorFlow models we built &mdash; written for someone who knows <b>functions, loops, and optimization</b>, but has never touched machine learning. Every piece, explained as the engineering it really is.</p>
+  <p class="lede">A ground-up teardown of the two TensorFlow models here &mdash; written for someone who knows <b>functions, loops, and optimization</b>, but has never touched machine learning. Every piece, explained as the engineering it really is.</p>
 
   <nav class="toc">
     <a href="#s0"><span class="n">§0</span><span>The problem behind the models</span></a>
     <a href="#s1"><span class="n">§1</span><span>The paradigm flip</span></a>
     <a href="#s2"><span class="n">§2</span><span>Anatomy of the model</span></a>
     <a href="#s3"><span class="n">§3</span><span>The training loop</span></a>
-    <a href="#s4"><span class="n">§4</span><span>Our three models</span></a>
+    <a href="#s4"><span class="n">§4</span><span>Our two models</span></a>
     <a href="#s5"><span class="n">§5</span><span>Doing it honestly</span></a>
     <a href="#s6"><span class="n">§6</span><span>Engine &amp; API: TF vs Keras</span></a>
   </nav>
@@ -188,45 +188,42 @@
 <section id="s0">
   <div class="sechead"><span class="sec">§0</span><h2>The problem behind the models</h2></div>
   <div class="col">
-  <p>These aren't toy models on toy data. They were trained on real outcomes from
-  a <strong>job-application pipeline</strong> I run &mdash; a system that submits
-  applications at high volume (thousands a month) across dozens of applicant-
-  tracking systems (Greenhouse, Lever, Workday, Ashby, iCIMS, &hellip;) and records
-  what happens to each one.</p>
+  <p>These aren't toy models on toy data. They were trained on real operational
+  data from a live <strong>inside-sales call system</strong> &mdash; every call the
+  sales team places or receives, logged with who dialed, when, and whether it
+  connected.</p>
 
   <h3>The business problem <span class="tag">// scale breaks triage</span></h3>
-  <p>Once you're applying at that volume, <em>applying</em> is no longer the
-  bottleneck &mdash; <strong>knowing which applications are worth a human's time
-  is</strong>. Most submissions never get a reply; a minority do. Nobody can
-  manually sift hundreds of open applications a week to decide where to invest
-  follow-up effort (a tailored note, a nudge, a warm intro). That triage decision
-  is the expensive, scarce resource.</p>
+  <p>The team makes hundreds of calls a day, and <strong>only ~41% connect</strong>.
+  Once you're dialing at that volume, <em>placing</em> calls isn't the bottleneck
+  &mdash; <strong>knowing when and by whom to dial</strong> is. Rep time is the
+  scarce resource; spending it on numbers that won't pick up, at hours nobody
+  answers, is pure waste.</p>
 
   <h3>What we set out to predict</h3>
   <ul>
-    <li><strong>Response likelihood (models 1 &amp; 2).</strong> At the moment of
-    submission &mdash; before any reply exists &mdash; estimate the probability an
-    application will get a recruiter response, from the job's text and its
-    structured metadata. That score <em>ranks</em> the queue so human effort flows
-    to the applications most likely to convert.</li>
-    <li><strong>Operational volume (model 3).</strong> Forecast throughput over
-    time &mdash; how many applications / calls / events to expect next &mdash; so
-    capacity and follow-up cadence can be planned instead of guessed.</li>
+    <li><strong>Connect likelihood (model 1).</strong> At the moment of dialing
+    &mdash; before the call is placed &mdash; estimate the probability it will be
+    answered, from dial-time features (rep, line, hour, day). That score
+    <em>ranks</em> when and by whom to call, so effort flows to the calls most
+    likely to connect.</li>
+    <li><strong>Operational volume (model 2).</strong> Forecast call throughput
+    over time &mdash; how many calls to expect next &mdash; so staffing and capacity
+    can be planned instead of guessed.</li>
   </ul>
-  <p>Both are genuine supervised-learning problems with honest difficulty: real
-  class imbalance (~30% of submissions get a response), messy free text, and a
-  small sample &mdash; which is exactly why the <a href="#s5">honesty section</a>
-  matters here and isn't decoration.</p>
+  <p>Both are genuine supervised-learning problems with honest difficulty: a
+  balanced but thin-signal label, and a small sample &mdash; which is exactly why
+  the <a href="#s5">honesty section</a> matters here and isn't decoration.</p>
 
-  <h3>Why TensorFlow / Keras <span class="tag">// one engine, three problem shapes</span></h3>
-  <p>The three problems span three different data shapes &mdash; free text,
-  structured columns, and a time series. TensorFlow/Keras was the deliberate choice:</p>
+  <h3>Why TensorFlow / Keras <span class="tag">// one engine, two problem shapes</span></h3>
+  <p>The two problems span two different data shapes &mdash; structured columns and
+  a time series. TensorFlow/Keras was the deliberate choice:</p>
   </div>
 
   <table class="spec">
     <tr><th>Reason</th><th>What it buys</th></tr>
-    <tr><td>one framework, all families</td><td>Text classification, tabular DNN, and sequence forecasting share one API (<code>layers</code> &rarr; <code>Model</code> &rarr; <code>compile/fit/predict</code>) &mdash; no switching libraries per problem.</td></tr>
-    <tr><td>in-graph preprocessing</td><td><code>TextVectorization</code>, <code>Normalization</code>, <code>StringLookup</code> live <em>inside</em> the model, so the saved artifact ingests raw strings/dicts. Kills train/serve skew &mdash; a production concern, not a notebook nicety.</td></tr>
+    <tr><td>one framework, all families</td><td>A tabular DNN and a sequence (LSTM) model share one API (<code>layers</code> &rarr; <code>Model</code> &rarr; <code>compile/fit/predict</code>) &mdash; no switching libraries per problem.</td></tr>
+    <tr><td>in-graph preprocessing</td><td><code>Normalization</code> and <code>StringLookup</code> live <em>inside</em> the model, so the saved artifact ingests a raw feature dict. Kills train/serve skew &mdash; a production concern, not a notebook nicety.</td></tr>
     <tr><td>autodiff + <code>fit()</code></td><td>The whole training loop &mdash; gradients, optimizer, callbacks, early stopping &mdash; is handled. Fast iteration on a laptop, CPU-only.</td></tr>
     <tr><td>portable SavedModel</td><td>One <code>.keras</code> file per model = a compiled function you load and call later, no retraining, easy to ship behind an endpoint.</td></tr>
     <tr><td>the stated goal</td><td>This is also a <strong>learning project</strong> &mdash; demonstrating hands-on TensorFlow competence across problem families was itself an objective.</td></tr>
@@ -235,9 +232,9 @@
   <div class="col">
   <div class="analogy">
     <span class="k">The one-liner</span>
-    <p>A high-volume application pipeline produces more opportunities than a human
-    can triage. These models turn its history into a <b>ranking signal</b> (who's
-    likely to respond) and a <b>capacity forecast</b> (how much is coming) &mdash;
+    <p>A high-volume call operation produces more dials than a human can optimize.
+    These models turn its history into a <b>ranking signal</b> (which calls will
+    connect) and a <b>capacity forecast</b> (how much volume is coming) &mdash;
     built on TensorFlow because one framework, with production-grade in-graph
     preprocessing, covers every data shape the problem throws at it.</p>
   </div>
@@ -248,7 +245,7 @@
 <section id="s1">
   <div class="sechead"><span class="sec">§1</span><h2>The one flip that makes ML click</h2></div>
   <div class="col">
-  <p>You already know how to write a function: you supply the <strong>rules</strong>, the caller supplies the <strong>input</strong>, out comes the <strong>output</strong>. Machine learning inverts the middle step. You can't write the rules &mdash; they're too messy (how <em>do</em> you score a job from its raw title?) &mdash; so instead you hand the machine a pile of <strong>example input&rarr;output pairs</strong>, and an algorithm <strong>derives the rules for you</strong>.</p>
+  <p>You already know how to write a function: you supply the <strong>rules</strong>, the caller supplies the <strong>input</strong>, out comes the <strong>output</strong>. Machine learning inverts the middle step. You can't write the rules &mdash; they're too messy (how <em>do</em> you score a sales call's odds of connecting?) &mdash; so instead you hand the machine a pile of <strong>example input&rarr;output pairs</strong>, and an algorithm <strong>derives the rules for you</strong>.</p>
   <p>A "model" is therefore just <strong>a function whose body you didn't write</strong>. <strong>Training</strong> is the process that writes that body. <strong>Inference</strong> is calling the finished function like any other.</p>
   </div>
 
@@ -479,40 +476,37 @@
 
 <!-- ============ S4 ============ -->
 <section id="s4">
-  <div class="sechead"><span class="sec">§4</span><h2>Our three models — same recipe, three data shapes</h2></div>
+  <div class="sechead"><span class="sec">§4</span><h2>Our two models — same recipe, two data shapes</h2></div>
   <div class="col">
-  <p>All three are the identical loop above. The <em>only</em> thing that differs is the shape of the data going in and the layer types that suit it.</p>
+  <p>Both are the identical loop above. The <em>only</em> thing that differs is the shape of the data going in and the layer types that suit it.</p>
 
-  <h3>Model 1 &mdash; Text classifier <span class="tag">// yes/no from words</span></h3>
-  <p>A network eats numbers, not strings, so step one is <strong>vectorization</strong>. We used <strong>TF-IDF</strong>: build a vocabulary from the corpus, then represent each document as a vector of word-importance scores. "IDF" down-weights words common to <em>every</em> document (like "the") and up-weights words that are rare overall but present here (like <code>greenhouse</code>) &mdash; so the informative tokens dominate. That vector feeds two <code>Dense</code> layers &rarr; one probability.</p>
+  <h3>Model 1 &mdash; Tabular classifier <span class="tag">// yes/no from columns</span></h3>
+  <p>The connect-rate model predicts whether a call will be answered, from <strong>structured columns</strong> known at dial time (which rep, inbound/outbound, which line, hour-of-day, day-of-week). A network eats numbers, so numeric columns get <strong>normalized</strong> (rescaled to mean&nbsp;0, so no single big-numbered feature dominates) and each category &mdash; the <code>rep</code>, the line &mdash; gets <strong>one-hot encoded</strong> (a 0/1 column per value, because "rep&nbsp;A" isn't numerically greater than "rep&nbsp;B"). Both steps are <strong>Keras layers</strong>, so the saved model ingests a raw feature dict &mdash; no external scaler to reproduce. That feeds two <code>Dense</code> layers &rarr; one probability. We run it head-to-head against gradient-boosted trees, the honest baseline for tabular data.</p>
   </div>
 
   <figure class="plate">
-    <svg viewBox="0 0 720 132" role="img" aria-label="Text pipeline: raw string to TF-IDF vector to dense network to probability">
-      <rect x="16" y="44" width="196" height="46" rx="5" class="bx"/>
-      <text x="114" y="66" text-anchor="middle" class="t2">"Senior ML Eng . greenhouse"</text>
-      <text x="114" y="82" text-anchor="middle" class="t3">raw string</text>
+    <svg viewBox="0 0 720 132" role="img" aria-label="Tabular pipeline: feature dict to normalization plus one-hot to dense network to probability">
+      <rect x="16" y="40" width="196" height="54" rx="5" class="bx"/>
+      <text x="114" y="63" text-anchor="middle" class="t2">{ rep, hour, line, ... }</text>
+      <text x="114" y="81" text-anchor="middle" class="t3">raw feature dict</text>
       <line x1="212" y1="67" x2="252" y2="67" class="ln" marker-end="url(#ar)"/>
-      <rect x="252" y="44" width="150" height="46" rx="5" class="bxa"/>
-      <text x="327" y="64" text-anchor="middle" class="ttl">TextVectorization</text>
-      <text x="327" y="80" text-anchor="middle" class="t3">TF-IDF vector</text>
+      <rect x="252" y="40" width="150" height="54" rx="5" class="bxa"/>
+      <text x="327" y="61" text-anchor="middle" class="ttl">Normalization</text>
+      <text x="327" y="79" text-anchor="middle" class="ttl">+ StringLookup</text>
       <line x1="402" y1="67" x2="442" y2="67" class="ln" marker-end="url(#ar)"/>
-      <rect x="442" y="44" width="130" height="46" rx="5" class="bx"/>
-      <text x="507" y="70" text-anchor="middle">Dense &times;2</text>
+      <rect x="442" y="40" width="130" height="54" rx="5" class="bx"/>
+      <text x="507" y="71" text-anchor="middle">Dense &times;2</text>
       <line x1="572" y1="67" x2="612" y2="67" class="ln" marker-end="url(#ar)"/>
-      <rect x="612" y="44" width="92" height="46" rx="5" class="bxa"/>
-      <text x="658" y="64" text-anchor="middle">0.45</text>
-      <text x="658" y="80" text-anchor="middle" class="t3">P(response)</text>
-      <text x="16" y="26" class="t3" fill="var(--accent-ink)">the vectorizer lives INSIDE the model &mdash; it ingests raw strings at inference time</text>
+      <rect x="612" y="40" width="92" height="54" rx="5" class="bxa"/>
+      <text x="658" y="62" text-anchor="middle">0.63</text>
+      <text x="658" y="80" text-anchor="middle" class="t3">P(answered)</text>
+      <text x="16" y="26" class="t3" fill="var(--accent-ink)">preprocessing lives INSIDE the model &mdash; it ingests a raw feature dict at inference time</text>
     </svg>
-    <figcaption><b>FIG.06</b> &mdash; Model 1. Because vectorization is a Keras layer, the saved <code>.keras</code> file takes raw text in and gives a probability out &mdash; no external preprocessing to reproduce.</figcaption>
+    <figcaption><b>FIG.06</b> &mdash; Model 1. Because normalization and one-hot encoding are Keras layers, the saved <code>.keras</code> file takes a raw feature dict in and gives a probability out &mdash; no external preprocessing to reproduce.</figcaption>
   </figure>
 
   <div class="col">
-  <h3>Model 2 &mdash; Tabular DNN <span class="tag">// yes/no from columns</span></h3>
-  <p>Same target, but the input is already structured (comp band, title length, ATS category, keyword flags). Numeric columns get <strong>normalized</strong> (rescaled to mean&nbsp;0, so no single big-numbered feature dominates); the <code>ats</code> category gets <strong>one-hot encoded</strong> (turned into a 0/1 column per category, because "greenhouse" isn't numerically greater than "lever"). Then: the same Dense stack. We built 1 &amp; 2 on the <em>same</em> target deliberately &mdash; a controlled text-vs-structured experiment.</p>
-
-  <h3>Model 3 &mdash; LSTM forecaster <span class="tag">// predict the next number in a sequence</span></h3>
+  <h3>Model 2 &mdash; LSTM forecaster <span class="tag">// predict the next number in a sequence</span></h3>
   <p>An <strong>LSTM</strong> (Long Short-Term Memory) is a layer with an internal <strong>memory cell</strong> and "gates" that decide what to remember, forget, and output as it reads a sequence step by step. That memory is what lets it learn trend and seasonality. We fed it via a <strong>sliding window</strong> &mdash; a trick to manufacture supervised examples from one long series &mdash; then <strong>forecast recursively</strong> by feeding each prediction back in as the next input.</p>
   </div>
 
@@ -547,7 +541,7 @@
         <text x="500" y="52" class="t3">actual</text><text x="590" y="52" class="t3" fill="var(--good)">forecast</text>
       </g>
     </svg>
-    <figcaption><b>FIG.07</b> &mdash; Model 3. Result: test RMSE 42.7 vs a naive last-value baseline of 52.7 &mdash; <span class="accent-t">19% better</span> &mdash; and a correctly seasonal 12-month forecast.</figcaption>
+    <figcaption><b>FIG.07</b> &mdash; Model 2. Result: test RMSE 42.7 vs a naive last-value baseline of 52.7 &mdash; <span class="accent-t">19% better</span> &mdash; and a correctly seasonal 12-month forecast.</figcaption>
   </figure>
 </section>
 
@@ -558,7 +552,7 @@
   <p>Every "ML gotcha" below has an exact analogue in ordinary engineering. This section is what separates a real model from a misleading demo &mdash; and it's your strongest interview material, because you can reason about it.</p>
 
   <h3>Overfitting <span class="tag">// memorizing instead of generalizing</span></h3>
-  <p>Our first text model scored <strong>0.97 on training data but 0.44 on unseen data</strong> &mdash; it had <em>memorized</em> the 228 training rows like a lookup table rather than learning a rule, so it failed on anything new. This is the identical bug to <strong>hardcoding answers to your exact test cases</strong>: the suite passes, the code is broken.</p>
+  <p>An early version scored <strong>0.97 on training data but far lower on unseen data</strong> &mdash; it had <em>memorized</em> the training rows like a lookup table rather than learning a rule, so it failed on anything new. This is the identical bug to <strong>hardcoding answers to your exact test cases</strong>: the suite passes, the code is broken.</p>
   </div>
 
   <figure class="plate">
@@ -582,10 +576,10 @@
   <p>We hold out data the model never sees in training and score only on that &mdash; an <strong>integration test on fresh inputs</strong>. Validation = the slice used to decide when to stop; test = the final, untouched exam.</p>
 
   <h3>Data leakage <span class="tag">// accidentally seeing the answer key</span></h3>
-  <p>We fit the text vectorizer and the number-scaler on the <strong>training portion only</strong>. Compute them over the whole dataset and information about the test set "leaks" into training, inflating your scores dishonestly &mdash; like <strong>benchmarking with the answer sheet open</strong>. Same discipline as never letting future data touch a backtest.</p>
+  <p>We fit the number-scaler and category-encoders on the <strong>training portion only</strong>, and for the time series we never let a future month touch the past. Compute those stats over the whole dataset and information about the test set "leaks" into training, inflating your scores dishonestly &mdash; like <strong>benchmarking with the answer sheet open</strong>. And a feature you won't <em>have</em> at prediction time (a call's duration, before it's placed) can't be a feature at all.</p>
 
   <h3>Class imbalance <span class="tag">// the "always return false" trap</span></h3>
-  <p>Only ~30% of applications got a response. A model that <em>always predicts "no"</em> scores 70% accuracy and is <strong>completely useless</strong>. We applied <strong>class weights</strong> &mdash; make errors on the rare "yes" cost more &mdash; so the optimizer can't ignore the minority class. It's also why we don't report raw accuracy.</p>
+  <p>When one outcome is rare &mdash; say only 30% of examples are positive &mdash; a model that <em>always predicts the majority</em> scores 70% accuracy and is <strong>completely useless</strong>. The fix is <strong>class weights</strong> &mdash; make errors on the rare class cost more &mdash; so the optimizer can't ignore the minority. It's also why we don't report raw accuracy.</p>
   </div>
 
   <figure class="plate">
@@ -615,7 +609,7 @@
         </g>
       </g>
     </svg>
-    <figcaption><b>FIG.09</b> &mdash; With only ~227 rows a single split is noisy, so we rotate the held-out fold five times and average &mdash; hence results reported as <code>0.56 &plusmn; 0.05</code>, a mean with an error bar rather than one lucky run.</figcaption>
+    <figcaption><b>FIG.09</b> &mdash; With only ~559 rows a single split is noisy, so we rotate the held-out fold five times and average &mdash; hence results reported as <code>0.60 &plusmn; 0.06</code>, a mean with an error bar rather than one lucky run.</figcaption>
   </figure>
 
   <div class="col">
@@ -625,12 +619,12 @@
     <div class="metric">
       <div class="v">ROC&#8209;AUC</div>
       <div class="l">ranking quality</div>
-      <div class="s">Pick a random responder &amp; non-responder: how often does the model rank the responder higher? 0.5 = coin flip, 1.0 = perfect. Ours &asymp; 0.56.</div>
+      <div class="s">Pick a random answered &amp; missed call: how often does the model rank the answered one higher? 0.5 = coin flip, 1.0 = perfect. Ours &asymp; 0.60.</div>
     </div>
     <div class="metric">
       <div class="v">AP</div>
       <div class="l">avg precision</div>
-      <div class="s">Precision-recall summarized; judged against the 0.30 base rate, so beating 0.30 means real signal.</div>
+      <div class="s">Precision-recall summarized; judged against the 0.41 base rate, so beating 0.41 means real signal.</div>
     </div>
     <div class="metric">
       <div class="v">RMSE</div>
@@ -641,7 +635,7 @@
   <div class="col">
   <div class="analogy">
     <span class="k">The honest summary</span>
-    <p>Our numbers are <b>modest because the signal is genuinely weak and the data small</b> &mdash; responses are mostly automated acks that track the ATS, not the job text. We reported that via cross-validation and baseline comparisons instead of cherry-picking one split. <b>Understanding <i>why</i> a model is mediocre is worth more than a pretty number you can't explain.</b></p>
+    <p>Our connect-rate numbers are <b>modest because the dial-time signal is genuinely thin and the sample small</b> &mdash; time-of-day and which rep dials carry most of it. We reported that via cross-validation and baseline comparisons instead of cherry-picking one split. <b>Understanding <i>why</i> a model is mediocre is worth more than a pretty number you can't explain.</b></p>
   </div>
   </div>
 </section>
@@ -681,8 +675,8 @@
 </section>
 
 <footer>
-  <div>END OF DOC &middot; <b>ml/</b> &mdash; 3 TensorFlow/Keras models on real pipeline data</div>
-  <div style="margin-top:6px">Models: <b>NLP text classifier</b> (CV ROC-AUC 0.56) &middot; <b>tabular DNN</b> (0.53) &middot; <b>LSTM forecaster</b> (beats naive 19%)</div>
+  <div>END OF DOC &middot; <b>machine-learning</b> &mdash; TensorFlow/Keras models on real operational data</div>
+  <div style="margin-top:6px">Models: <b>call connect-rate classifier</b> (CV ROC-AUC 0.60, DNN vs gradient-boosted trees) &middot; <b>LSTM forecaster</b> (beats naive 19%)</div>
 </footer>
 
 </div>
