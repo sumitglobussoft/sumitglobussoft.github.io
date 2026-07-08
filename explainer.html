@@ -174,6 +174,7 @@
   <p class="lede">A ground-up teardown of the three TensorFlow models we built &mdash; written for someone who knows <b>functions, loops, and optimization</b>, but has never touched machine learning. Every piece, explained as the engineering it really is.</p>
 
   <nav class="toc">
+    <a href="#s0"><span class="n">§0</span><span>The problem behind the models</span></a>
     <a href="#s1"><span class="n">§1</span><span>The paradigm flip</span></a>
     <a href="#s2"><span class="n">§2</span><span>Anatomy of the model</span></a>
     <a href="#s3"><span class="n">§3</span><span>The training loop</span></a>
@@ -182,6 +183,66 @@
     <a href="#s6"><span class="n">§6</span><span>Engine &amp; API: TF vs Keras</span></a>
   </nav>
 </header>
+
+<!-- ============ S0 ============ -->
+<section id="s0">
+  <div class="sechead"><span class="sec">§0</span><h2>The problem behind the models</h2></div>
+  <div class="col">
+  <p>These aren't toy models on toy data. They were trained on real outcomes from
+  a <strong>job-application pipeline</strong> I run &mdash; a system that submits
+  applications at high volume (thousands a month) across dozens of applicant-
+  tracking systems (Greenhouse, Lever, Workday, Ashby, iCIMS, &hellip;) and records
+  what happens to each one.</p>
+
+  <h3>The business problem <span class="tag">// scale breaks triage</span></h3>
+  <p>Once you're applying at that volume, <em>applying</em> is no longer the
+  bottleneck &mdash; <strong>knowing which applications are worth a human's time
+  is</strong>. Most submissions never get a reply; a minority do. Nobody can
+  manually sift hundreds of open applications a week to decide where to invest
+  follow-up effort (a tailored note, a nudge, a warm intro). That triage decision
+  is the expensive, scarce resource.</p>
+
+  <h3>What we set out to predict</h3>
+  <ul>
+    <li><strong>Response likelihood (models 1 &amp; 2).</strong> At the moment of
+    submission &mdash; before any reply exists &mdash; estimate the probability an
+    application will get a recruiter response, from the job's text and its
+    structured metadata. That score <em>ranks</em> the queue so human effort flows
+    to the applications most likely to convert.</li>
+    <li><strong>Operational volume (model 3).</strong> Forecast throughput over
+    time &mdash; how many applications / calls / events to expect next &mdash; so
+    capacity and follow-up cadence can be planned instead of guessed.</li>
+  </ul>
+  <p>Both are genuine supervised-learning problems with honest difficulty: real
+  class imbalance (~30% of submissions get a response), messy free text, and a
+  small sample &mdash; which is exactly why the <a href="#s5">honesty section</a>
+  matters here and isn't decoration.</p>
+
+  <h3>Why TensorFlow / Keras <span class="tag">// one engine, three problem shapes</span></h3>
+  <p>The three problems span three different data shapes &mdash; free text,
+  structured columns, and a time series. TensorFlow/Keras was the deliberate choice:</p>
+  </div>
+
+  <table class="spec">
+    <tr><th>Reason</th><th>What it buys</th></tr>
+    <tr><td>one framework, all families</td><td>Text classification, tabular DNN, and sequence forecasting share one API (<code>layers</code> &rarr; <code>Model</code> &rarr; <code>compile/fit/predict</code>) &mdash; no switching libraries per problem.</td></tr>
+    <tr><td>in-graph preprocessing</td><td><code>TextVectorization</code>, <code>Normalization</code>, <code>StringLookup</code> live <em>inside</em> the model, so the saved artifact ingests raw strings/dicts. Kills train/serve skew &mdash; a production concern, not a notebook nicety.</td></tr>
+    <tr><td>autodiff + <code>fit()</code></td><td>The whole training loop &mdash; gradients, optimizer, callbacks, early stopping &mdash; is handled. Fast iteration on a laptop, CPU-only.</td></tr>
+    <tr><td>portable SavedModel</td><td>One <code>.keras</code> file per model = a compiled function you load and call later, no retraining, easy to ship behind an endpoint.</td></tr>
+    <tr><td>the stated goal</td><td>This is also a <strong>learning project</strong> &mdash; demonstrating hands-on TensorFlow competence across problem families was itself an objective.</td></tr>
+  </table>
+
+  <div class="col">
+  <div class="analogy">
+    <span class="k">The one-liner</span>
+    <p>A high-volume application pipeline produces more opportunities than a human
+    can triage. These models turn its history into a <b>ranking signal</b> (who's
+    likely to respond) and a <b>capacity forecast</b> (how much is coming) &mdash;
+    built on TensorFlow because one framework, with production-grade in-graph
+    preprocessing, covers every data shape the problem throws at it.</p>
+  </div>
+  </div>
+</section>
 
 <!-- ============ S1 ============ -->
 <section id="s1">
